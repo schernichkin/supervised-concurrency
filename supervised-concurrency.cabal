@@ -1,0 +1,30 @@
+name:          supervised-concurrency
+version:       0.0.0.0
+cabal-version: >= 1.10
+buid-type:     Simple
+license:       BSD3
+copyright:     2015 Stanislav Chernichkin
+author:        Stanislav Chernichkin
+maintainer:    schernichkin@gmail.com
+homepage:      http://github.com/schernichkin/supervised-concurrency
+bug-reports:   http://github.com/schernichkin/supervised-concurrency/issues
+Category:      Concurrency
+synopsis:
+description:
+
+source-repository head
+  type: git
+  location: git://github.com/schernichkin/supervised-concurrency.git
+
+library
+  default-language: Haskell98
+  hs-source-dirs: src
+  exposed-modules:
+    Control.Concurrent.Supervised
+
+  build-depends: base              >= 4
+               , stm               >= 2
+               , transformers      >= 0.2
+               , transformers-base >= 0.4
+               , monad-control     >= 0.3
+               , lifted-base       >= 0.2
