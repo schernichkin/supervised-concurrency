@@ -14,4 +14,3 @@ ghc-args:
 - -Wall
 excluded-modules:
 - samples/automatic-termination/Main.hs
-- src/Main.hs

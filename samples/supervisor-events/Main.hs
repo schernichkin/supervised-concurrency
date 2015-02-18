@@ -12,9 +12,7 @@ import           Control.Monad.Trans.Control
 worker1 :: (MonadBaseControl IO m) => SupervisedT s m ()
 worker1 = do
     liftBase $ threadDelay 1000000
-    test <- spawn worker2
-    liftBase $ killThread test
-    liftBase $ killThread test
+    void $ spawn worker2
     liftBase $ putStrLn $ "worker1 done."
 
 worker2 :: (MonadBase IO m) => SupervisedT s m ()
