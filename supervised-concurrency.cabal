@@ -1,6 +1,7 @@
 name:          supervised-concurrency
 version:       0.0.0.0
 cabal-version: >= 1.10
+build-type:    Simple
 license:       BSD3
 License-file:  LICENSE
 copyright:     2015 Stanislav Chernichkin
