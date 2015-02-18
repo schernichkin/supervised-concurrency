@@ -29,3 +29,4 @@ library
                , transformers-base >= 0.4
                , monad-control     >= 0.3
                , lifted-base       >= 0.2
+               , containers        >= 0.5
