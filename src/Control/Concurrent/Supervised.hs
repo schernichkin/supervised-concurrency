@@ -1,3 +1,4 @@
+{-# LANGUAGE EmptyDataDecls             #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GADTs                      #-}
@@ -22,10 +23,10 @@ import           Control.Monad.Trans.Control
 import           Control.Monad.Trans.Maybe
 import           Control.Monad.Trans.Reader
 import           Data.Foldable
-import           Data.List                    as List
-import           Data.Map                     as Map
+import           Data.List                   as List
+import           Data.Map                    as Map
 import           Data.Maybe
-import           Data.Traversable             as Traversable
+import           Data.Traversable            as Traversable
 
 data ThreadInfo = ThreadInfo
     { _threadId    :: ThreadId
@@ -38,9 +39,9 @@ data ThreadState = New | Runnable | Waiting WaitTarget | Terminated deriving ( S
 data WaitTarget = SupervisorEvent | SupervisedChannel deriving ( Show, Eq )
 
 data Supervisor = Supervisor
-    { _threads            :: TVar (Map ThreadId ThreadEntry)
-    , _terminating        :: TVar Bool
-    , _threadsRunning     :: TVar Int
+    { _threads        :: TVar (Map ThreadId ThreadEntry)
+    , _terminating    :: TVar Bool
+    , _threadsRunning :: TVar Int
     }
 
 data ThreadEntry = ThreadEntry (TVar (Maybe String)) (TVar ThreadState)
