@@ -49,6 +49,7 @@ import           Data.Map                    as Map
 import           Data.Maybe
 import           Data.Traversable            as Traversable
 
+
 data ThreadInfo = ThreadInfo
     { _threadId    :: ThreadId
     , _threadName  :: Maybe String
@@ -244,7 +245,7 @@ data ChannelState = Free Int Int       -- ^ Channel is free to send recieve (num
                   | RecieverReply Bool -- ^ Recievers reply to current sender (bool indicated if a message was actually recieved or reciever was interrupted).
     deriving ( Show )
 
-registerChannel :: (MonadBaseControl IO m) => (Channel Unsupervised m a) -> SupervisedT s m (Channel  s m a)
+registerChannel :: (MonadBase IO m, MonadBaseControl IO n) => (Channel Unsupervised n a) -> SupervisedT s m (Channel s n a)
 registerChannel (Channel sender reciever) = SupervisedT $ do
     channelStateVar <- liftBase $ atomically $ newTVar $ Free 0 0
     supervisor <- ask
