@@ -23,14 +23,12 @@ module Control.Concurrent.Supervised
     , setThreadName
     , getOthersThreadName
     , setOthersThreadName
-    
+
     , Channel (..)
     , Sender
     , Receiver
     , Unsupervised
     , registerChannel
-    , send
-    , recieve
     ) where
 
 import           Control.Applicative
@@ -346,9 +344,3 @@ registerChannel (Channel sender reciever) = SupervisedT $ do
                 Nothing -> throwIO ThreadKilled
 
     return $ Channel sendSupervised recieveSupervised
-
-send :: (Monad m) => Channel s m a -> a -> SupervisedT s m ()
-send (Channel sender _) = lift . sender
-
-recieve :: (Monad m) => Channel s m a -> SupervisedT s m a
-recieve (Channel _ reciever) = lift reciever
