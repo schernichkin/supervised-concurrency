@@ -8,20 +8,19 @@ import           Control.Concurrent.Supervised
 import           Control.Monad
 import           Control.Monad.Base
 
-worker :: (MonadBase IO m) => String -> SupervisedT s m ()
-worker name = go
-    where
-        go = do
-            liftBase $ do
-                putStrLn $ "hello from worker " ++ name
-                threadDelay 1000000
-            go
+worker :: (MonadBase IO m) => SupervisedT s m ()
+worker = do
+    (Just name) <- getThreadName
+    liftBase $ do
+        putStrLn $ "hello from worker " ++ name
+        threadDelay 1000000
+    worker
 
 main :: IO ()
 main = do
     runSupervisedT $ do
-        spawn $ worker "worker 1"
-        spawn $ worker "worker 2"
+        void $ spawnNamed "worker 1" worker
+        void $ spawnNamed "worker 2" worker
         liftBase $ do
             putStrLn "Press any key to terminate.."
             void $ getChar

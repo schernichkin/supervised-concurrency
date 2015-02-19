@@ -8,7 +8,30 @@
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE UndecidableInstances       #-}
 
-module Control.Concurrent.Supervised where
+module Control.Concurrent.Supervised 
+    ( SupervisedT
+    , runSupervisedT
+    , spawn
+    , spawnNamed
+
+    , SupervisorEvent (..)
+    , ThreadInfo (..)
+    , ThreadState
+    , waitTill
+
+    , getThreadName
+    , setThreadName
+    , getOthersThreadName
+    , setOthersThreadName
+    
+    , Channel (..)
+    , Sender
+    , Receiver
+    , Unsupervised
+    , registerChannel
+    , send
+    , recieve
+    ) where
 
 import           Control.Applicative
 import           Control.Concurrent.Lifted
@@ -170,6 +193,9 @@ setOthersThreadName threadId threadName = SupervisedT $ do
         (ThreadEntry threadNameVar _) <- MaybeT $ getThreadEntry supervisor threadId
         liftBase $ atomically $ writeTVar threadNameVar $ Just threadName
 
+setThreadName :: (MonadBase IO m) => String -> SupervisedT s m Bool
+setThreadName = (liftBase myThreadId >>=) . flip setOthersThreadName
+
 data SupervisorEvent result where
     ThreadState :: ThreadId -> (ThreadInfo -> Maybe result) -> SupervisorEvent (Maybe result)
     SupervisorState :: (Map ThreadId ThreadInfo -> Maybe result) -> SupervisorEvent result
@@ -220,11 +246,8 @@ data ChannelState = Free Int Int       -- ^ Channel is free to send recieve (num
                   | RecieverReply Bool -- ^ Recievers reply to current sender (bool indicated if a message was actually recieved or reciever was interrupted).
     deriving ( Show )
 
-tryAny :: (MonadBaseControl IO m, Exception e) => m a -> m (Either e a)
-tryAny = try
-
-registerChannel' :: (MonadBaseControl IO m) => (Channel Unsupervised m a) -> SupervisedT s m (Channel  s m a)
-registerChannel' (Channel sender reciever) = SupervisedT $ do
+registerChannel :: (MonadBaseControl IO m) => (Channel Unsupervised m a) -> SupervisedT s m (Channel  s m a)
+registerChannel (Channel sender reciever) = SupervisedT $ do
     channelStateVar <- liftBase $ atomically $ newTVar $ Free 0 0
     supervisor <- ask
 

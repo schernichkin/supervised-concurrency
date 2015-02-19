@@ -13,7 +13,10 @@ worker1 :: (MonadBaseControl IO m) => SupervisedT s m ()
 worker1 = do
     liftBase $ threadDelay 1000000
     void $ spawn worker2
-    liftBase $ putStrLn $ "worker1 done."
+    threadId <- spawn worker2
+    liftBase $ do
+        killThread threadId -- note you may use haskell functions to kill supervised thread
+        putStrLn $ "worker1 done."
 
 worker2 :: (MonadBase IO m) => SupervisedT s m ()
 worker2 = liftBase $ do
