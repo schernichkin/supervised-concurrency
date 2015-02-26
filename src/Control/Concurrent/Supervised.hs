@@ -16,7 +16,7 @@ module Control.Concurrent.Supervised
 
     , SupervisorEvent (..)
     , ThreadInfo (..)
-    , ThreadState
+    , ThreadState (..)
     , waitTill
 
     , getThreadName
@@ -48,7 +48,6 @@ import           Data.List                   as List
 import           Data.Map                    as Map
 import           Data.Maybe
 import           Data.Traversable            as Traversable
-
 
 data ThreadInfo = ThreadInfo
     { _threadId    :: ThreadId
@@ -330,8 +329,8 @@ registerChannel (Channel sender reciever) = SupervisedT $ do
                                 (Free messagesPending threadsWaiting) | not success -> writeTVar channelStateVar $ Free messagesPending (pred threadsWaiting)
                                 -- Channel is free and success is true. This should never happen, because in case of success sender will always wait notification.
                                 (Free _ _) | success -> error "supervised-concurrency panic: channel state disrupted: waiting thread has recieved a message with no sender lock."
-                                -- Reciever want reply from us
-                                RecieverLock -> writeTVar channelStateVar $ RecieverReply success
+                                -- Sender wants reply from us
+                                SenderLock -> writeTVar channelStateVar $ RecieverReply success
                                 -- some other sort of communication, ignore
                                 _ -> retry
 
