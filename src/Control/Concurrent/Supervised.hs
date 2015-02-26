@@ -55,7 +55,7 @@ data ThreadInfo = ThreadInfo
     , _threadState :: ThreadState
     } deriving ( Show, Eq )
 
-data ThreadState = New | Runnable | Waiting WaitTarget | Terminated deriving ( Show, Eq )
+data ThreadState = Unstarted | Runnable | Waiting WaitTarget | Terminated deriving ( Show, Eq )
 
 data WaitTarget = SupervisorEvent | SupervisedChannel deriving ( Show, Eq )
 
@@ -123,11 +123,11 @@ setThreadState' supervisor (ThreadEntry _ threadState) newValue = do
     when (oldValue /= newValue) $ do
         writeTVar threadState newValue
         case (oldValue, newValue) of
-            (New,         Runnable) -> modifyTVar (_threadsRunning supervisor) (succ)
-            (New,       Terminated) -> return ()
+            (Unstarted,   Runnable) -> modifyTVar (_threadsRunning supervisor) (succ)
+            (Unstarted, Terminated) -> return ()
 
-            (Waiting _,    Runnable) -> modifyTVar (_threadsRunning supervisor) (succ)
-            (Waiting _,  Terminated) -> return ()
+            (Waiting _,   Runnable) -> modifyTVar (_threadsRunning supervisor) (succ)
+            (Waiting _, Terminated) -> return ()
 
             (Runnable,   Waiting _) -> modifyTVar (_threadsRunning supervisor) (pred)
             (Runnable,  Terminated) -> modifyTVar (_threadsRunning supervisor) (pred)
@@ -145,7 +145,7 @@ getThreadEntry supervisor threadId = liftBase $ atomically $ readTVar (_threads 
 -- | Spawns new supervised thread. This method will block till the new thread will register itself.
 spawn' :: (MonadBaseControl IO m) => Maybe String -> SupervisedT s m () -> SupervisedT s m ThreadId
 spawn' name action = SupervisedT $ do
-    threadEntry@(ThreadEntry _ threadState) <- liftBase $ atomically $ ThreadEntry <$> newTVar name <*> newTVar New
+    threadEntry@(ThreadEntry _ threadState) <- liftBase $ atomically $ ThreadEntry <$> newTVar name <*> newTVar Unstarted
     supervisor <- ask
     uninterruptibleMask_ $ do
         newThread <- forkWithUnmask $ \unmask -> do
@@ -165,7 +165,7 @@ spawn' name action = SupervisedT $ do
         -- I use uninterruptibleMask_ because I want to guarantee that calling thread will be blocked till
         -- new thread registered. Otherwise calling thread could be interruped on retry which is not desired.
         -- Thread is guaranted not to be deadlocked because new thread will eventually update it's status.
-        liftBase $ atomically $ readTVar threadState >>= check . (/=) New
+        liftBase $ atomically $ readTVar threadState >>= check . (/=) Unstarted
         return newThread
 
 spawn :: (MonadBaseControl IO m) => SupervisedT s m () -> SupervisedT s m ThreadId
