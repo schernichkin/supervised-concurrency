@@ -7,9 +7,8 @@ import           Control.Concurrent
 import           Control.Concurrent.Supervised
 import           Control.Monad
 import           Control.Monad.Base
-import           Control.Monad.Trans.Control
 
-worker1 :: (MonadBaseControl IO m) => SupervisedT s m ()
+worker1 :: (MonadSupervisor m) => m ()
 worker1 = do
     liftBase $ threadDelay 1000000
     void $ spawn worker2
@@ -18,7 +17,7 @@ worker1 = do
         killThread threadId -- note you may use haskell functions to kill supervised thread
         putStrLn $ "worker1 done."
 
-worker2 :: (MonadBase IO m) => SupervisedT s m ()
+worker2 :: (MonadBase IO m) => m ()
 worker2 = liftBase $ do
     threadDelay 1000000
     putStrLn $ "worker2 done."

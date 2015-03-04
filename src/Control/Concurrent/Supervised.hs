@@ -8,9 +8,11 @@
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE UndecidableInstances       #-}
 
-module Control.Concurrent.Supervised 
-    ( SupervisedT
-    , runSupervisedT
+module Control.Concurrent.Supervised
+    ( Supervisor
+    , MonadSupervisor (..)
+    , SupervisorT
+    , runSupervisorT
     , spawn
     , spawnNamed
 
@@ -68,7 +70,10 @@ data Supervisor = Supervisor
 
 data ThreadEntry = ThreadEntry (TVar (Maybe String)) (TVar ThreadState)
 
-newtype SupervisedT s m a = SupervisedT { unSupervisedT :: ReaderT Supervisor m a } deriving
+class (MonadBaseControl IO m) => MonadSupervisor m where
+    getSupervisor :: m Supervisor
+
+newtype SupervisorT s m a = SupervisedT { unSupervisorT :: ReaderT Supervisor m a } deriving
     ( Functor
     , Applicative
     , Alternative
@@ -78,26 +83,29 @@ newtype SupervisedT s m a = SupervisedT { unSupervisedT :: ReaderT Supervisor m 
     , MonadIO
     , MonadTrans )
 
-instance MonadTransControl (SupervisedT s) where
-    newtype StT (SupervisedT s) a = StSupervisedT { unStSupervisedT :: StT (ReaderT Supervisor) a }
-    liftWith = defaultLiftWith SupervisedT unSupervisedT StSupervisedT
+instance (MonadBaseControl IO m) => MonadSupervisor (SupervisorT s m) where
+    getSupervisor = SupervisedT ask
+
+instance MonadTransControl (SupervisorT s) where
+    newtype StT (SupervisorT s) a = StSupervisedT { unStSupervisedT :: StT (ReaderT Supervisor) a }
+    liftWith = defaultLiftWith SupervisedT unSupervisorT StSupervisedT
     restoreT = defaultRestoreT SupervisedT unStSupervisedT
 
-instance (MonadBase b m) => MonadBase b (SupervisedT s m) where
+instance (MonadBase b m) => MonadBase b (SupervisorT s m) where
     liftBase = liftBaseDefault
 
-instance (MonadBaseControl b m) => MonadBaseControl b (SupervisedT s m) where
-    newtype StM (SupervisedT s m) a = StMSupervisedT { unStMSupervisedT :: ComposeSt (SupervisedT s) m a }
+instance (MonadBaseControl b m) => MonadBaseControl b (SupervisorT s m) where
+    newtype StM (SupervisorT s m) a = StMSupervisedT { unStMSupervisedT :: ComposeSt (SupervisorT s) m a }
 
     liftBaseWith = defaultLiftBaseWith StMSupervisedT
     restoreM     = defaultRestoreM unStMSupervisedT
 
-runSupervisedT :: (MonadBaseControl IO m) => (forall s . SupervisedT s m a) -> m a
-runSupervisedT action = do
+runSupervisorT :: (MonadBaseControl IO m) => (forall s . SupervisorT s m a) -> m a
+runSupervisorT action = do
     bracket
        startSupervisor
        stopSupervisor
-       (runReaderT $ unSupervisedT action)
+       (runReaderT $ unSupervisorT action)
     where
         startSupervisor = liftBase $ do
             thisThread <- myThreadId
@@ -148,10 +156,10 @@ getThreadEntry :: (MonadBase IO m) => Supervisor -> ThreadId -> m (Maybe ThreadE
 getThreadEntry supervisor threadId = liftBase $ atomically $ readTVar (_threads supervisor) >>= return . Map.lookup threadId
 
 -- | Spawns new supervised thread. This method will block till the new thread will register itself.
-spawn' :: (MonadBaseControl IO m) => Maybe String -> SupervisedT s m () -> SupervisedT s m ThreadId
-spawn' name action = SupervisedT $ do
+spawn' :: (MonadSupervisor m) => Maybe String -> m () -> m ThreadId
+spawn' name action = do
     threadEntry@(ThreadEntry _ threadState) <- liftBase $ atomically $ ThreadEntry <$> newTVar name <*> newTVar Unstarted
-    supervisor <- ask
+    supervisor <- getSupervisor
     uninterruptibleMask_ $ do
         newThread <- forkWithUnmask $ \unmask -> do
             thisThread <- myThreadId
@@ -164,7 +172,7 @@ spawn' name action = SupervisedT $ do
                     True  ->
                         setThreadState' supervisor threadEntry Terminated
                 return terminating
-            when (not terminated) $ finally (unmask (unSupervisedT action)) $ liftBase $ atomically $ do
+            when (not terminated) $ finally (unmask action) $ liftBase $ atomically $ do
                 setThreadState' supervisor threadEntry Terminated
                 modifyTVar (_threads supervisor) (Map.delete thisThread)
         -- I use uninterruptibleMask_ because I want to guarantee that calling thread will be blocked till
@@ -173,30 +181,30 @@ spawn' name action = SupervisedT $ do
         liftBase $ atomically $ readTVar threadState >>= check . (/=) Unstarted
         return newThread
 
-spawn :: (MonadBaseControl IO m) => SupervisedT s m () -> SupervisedT s m ThreadId
+spawn :: (MonadSupervisor m) => m () -> m ThreadId
 spawn = spawn' Nothing
 
-spawnNamed :: (MonadBaseControl IO m) => String -> SupervisedT s m () -> SupervisedT s m ThreadId
+spawnNamed :: (MonadSupervisor m) => String -> m () -> m ThreadId
 spawnNamed = spawn' . Just
 
-getOthersThreadName :: (MonadBase IO m) => ThreadId -> SupervisedT s m (Maybe String)
-getOthersThreadName threadId = SupervisedT $ do
-    supervisor <- ask
+getOthersThreadName :: (MonadSupervisor m) => ThreadId -> m (Maybe String)
+getOthersThreadName threadId = do
+    supervisor <- getSupervisor
     runMaybeT $ do
         (ThreadEntry threadNameVar _) <- MaybeT $ getThreadEntry supervisor threadId
         MaybeT $ liftBase $ atomically $ readTVar threadNameVar
 
-getThreadName :: (MonadBase IO m) =>  SupervisedT s m (Maybe String)
+getThreadName :: (MonadSupervisor m) => m (Maybe String)
 getThreadName =  liftBase myThreadId >>= getOthersThreadName
 
-setOthersThreadName :: (MonadBase IO m) => ThreadId -> String -> SupervisedT s m Bool
-setOthersThreadName threadId threadName = SupervisedT $ do
-    supervisor <- ask
+setOthersThreadName :: (MonadSupervisor m) => ThreadId -> String -> m Bool
+setOthersThreadName threadId threadName = do
+    supervisor <- getSupervisor
     fmap isJust $ runMaybeT $ do
         (ThreadEntry threadNameVar _) <- MaybeT $ getThreadEntry supervisor threadId
         liftBase $ atomically $ writeTVar threadNameVar $ Just threadName
 
-setThreadName :: (MonadBase IO m) => String -> SupervisedT s m Bool
+setThreadName :: (MonadSupervisor m) => String -> m Bool
 setThreadName = (liftBase myThreadId >>=) . flip setOthersThreadName
 
 data SupervisorEvent result where
@@ -214,10 +222,10 @@ toThreadInfo threadId (ThreadEntry threadNameVar threadStateVar) = do
         , _threadState = threadState
         }
 
-waitTill :: (MonadBaseControl IO m) => SupervisorEvent a -> SupervisedT s m a
-waitTill event = SupervisedT $ do
+waitTill :: (MonadSupervisor m) => SupervisorEvent a -> m a
+waitTill event = do
     thisThread  <- myThreadId
-    supervisor <- ask
+    supervisor <- getSupervisor
     -- Update thread state and wait for event (masked, interruptable)
     liftBase $ mask_ $ do
         atomically $ setThreadState supervisor thisThread $ Waiting SupervisorEvent
@@ -249,7 +257,7 @@ data ChannelState = Free Int Int       -- ^ Channel is free to send recieve (num
                   | RecieverReply Bool -- ^ Recievers reply to current sender (bool indicated if a message was actually recieved or reciever was interrupted).
     deriving ( Show )
 
-registerChannel :: (MonadBase IO m, MonadBaseControl IO n) => (Channel Unsupervised n a) -> SupervisedT s m (Channel s n a)
+registerChannel :: (MonadBase IO m, MonadBaseControl IO n) => (Channel Unsupervised n a) -> SupervisorT s m (Channel s n a)
 registerChannel (Channel sender reciever) = SupervisedT $ do
     channelStateVar <- liftBase $ atomically $ newTVar $ Free 0 0
     supervisor <- ask

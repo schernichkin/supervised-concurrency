@@ -1,10 +1,11 @@
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE RankNTypes            #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE MultiParamTypeClasses     #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE RankNTypes                #-}
 
 module Main where
 
-import           Control.Concurrent            (threadDelay, ThreadId)
+import           Control.Concurrent            (ThreadId, threadDelay)
 import           Control.Concurrent.Supervised
 import           Control.Monad
 import           Control.Monad.Base
@@ -13,11 +14,11 @@ import           Control.Monad.Trans.Maybe
 import           Pipes
 import qualified Pipes.Concurrent              as Pipes
 
-newChannel :: (MonadBaseControl IO m) => Pipes.Buffer a -> SupervisedT s m (Sender s (MaybeT IO) a, Receiver s (MaybeT IO) a)
+newChannel :: (MonadBaseControl IO m) => Pipes.Buffer a -> SupervisorT s m (Sender s (MaybeT IO) a, Receiver s (MaybeT IO) a)
 newChannel buffer = fmap simplify (newChannel' buffer)
     where simplify (sender, reciever, _) = (sender, reciever)
 
-newChannel' :: (MonadBaseControl IO m) => Pipes.Buffer a -> SupervisedT s m (Sender s (MaybeT IO) a, Receiver s (MaybeT IO) a, IO ())
+newChannel' :: (MonadBaseControl IO m) => Pipes.Buffer a -> SupervisorT s m (Sender s (MaybeT IO) a, Receiver s (MaybeT IO) a, IO ())
 newChannel' buffer = do
     (o, i, s) <- liftBase $ Pipes.spawn' buffer
 
@@ -33,16 +34,16 @@ newChannel' buffer = do
     Channel registeredSender registeredReciever <- registerChannel $ Channel sender reciever
     return (registeredSender, registeredReciever, sealer)
 
-send :: (MonadBase IO m) => Sender s (MaybeT IO) a -> a -> SupervisedT s m Bool
+send :: (MonadBase IO m) => Sender s (MaybeT IO) a -> a -> SupervisorT s m Bool
 send sender = liftM (maybe False $ const True) . liftBase . runMaybeT . sender
 
-recv :: (MonadBase IO m) => Receiver s (MaybeT IO) a -> SupervisedT s m (Maybe a)
+recv :: (MonadBase IO m) => Receiver s (MaybeT IO) a -> SupervisorT s m (Maybe a)
 recv reciever = liftBase $ runMaybeT reciever
 
-seal :: (MonadBase IO m) => IO () -> SupervisedT s m ()
+seal :: (MonadBase IO m) => IO () -> SupervisorT s m ()
 seal = liftBase
 
-fromInput :: (MonadBase IO m) => Receiver s (MaybeT IO) a -> Producer' a (SupervisedT s m) ()
+fromInput :: (MonadBase IO m) => Receiver s (MaybeT IO) a -> Producer' a (SupervisorT s m) ()
 fromInput reciever = loop
     where
         loop = do
@@ -53,7 +54,7 @@ fromInput reciever = loop
                     yield a
                     loop
 
-toOutput :: (MonadBase IO m) => Sender s (MaybeT IO) a -> Consumer' a (SupervisedT s m) ()
+toOutput :: (MonadBase IO m) => Sender s (MaybeT IO) a -> Consumer' a (SupervisorT s m) ()
 toOutput sender = loop
   where
     loop = do
@@ -61,7 +62,7 @@ toOutput sender = loop
         alive <- lift $ send sender a
         when alive loop
 
-consumer :: (MonadIO m) => Consumer Int (SupervisedT s m) ()
+consumer :: (MonadIO m) => Consumer Int m ()
 consumer = do
     liftIO $ threadDelay 100000
     liftIO $ putStrLn $ "consumer started"
@@ -71,7 +72,7 @@ consumer = do
             putStrLn $ "Got message " ++ (show a)
             threadDelay 200000
 
-producer :: (MonadIO m) => Producer Int (SupervisedT s m) ()
+producer :: (MonadIO m) => Producer Int m ()
 producer = do
     liftIO $ threadDelay 200000
     liftIO $ putStrLn $ "producer started"
@@ -80,7 +81,7 @@ producer = do
         yield a
         liftIO $ threadDelay 100000
 
-tracer  :: (MonadBaseControl IO m) => ThreadId -> ThreadState -> SupervisedT s m ()
+tracer  :: (MonadSupervisor m) => ThreadId -> ThreadState -> m ()
 tracer threadId prevState = do
     maybeInfo <- waitTill $ ThreadState threadId (\info -> if _threadState info /= prevState then Just info else Nothing)
     case maybeInfo of
@@ -91,7 +92,7 @@ tracer threadId prevState = do
 
 main :: IO ()
 main = do
-    runSupervisedT $ do
+    runSupervisorT $ do
         void $ setThreadName "mainThread"
         (output, input) <- newChannel Pipes.Unbounded
         consumerId <- spawnNamed "consumer" $ runEffect (fromInput input >-> consumer)

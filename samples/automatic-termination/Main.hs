@@ -8,7 +8,7 @@ import           Control.Concurrent.Supervised
 import           Control.Monad
 import           Control.Monad.Base
 
-worker :: (MonadBase IO m) => SupervisedT s m ()
+worker :: (MonadSupervisor m) => m ()
 worker = do
     (Just name) <- getThreadName
     liftBase $ do
