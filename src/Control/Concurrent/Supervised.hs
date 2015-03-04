@@ -48,6 +48,7 @@ import           Data.List                   as List
 import           Data.Map                    as Map
 import           Data.Maybe
 import           Data.Traversable            as Traversable
+import           Debug.Trace
 
 data ThreadInfo = ThreadInfo
     { _threadId    :: ThreadId
@@ -118,10 +119,9 @@ runSupervisedT action = do
             return ()
 
 setThreadState' :: Supervisor -> ThreadEntry -> ThreadState -> STM ()
-setThreadState' supervisor (ThreadEntry _ threadState) newValue = do
+setThreadState' supervisor (ThreadEntry nameTVar threadState) newValue = do
     oldValue <- readTVar threadState
     when (oldValue /= newValue) $ do
-        writeTVar threadState newValue
         case (oldValue, newValue) of
             (Unstarted,   Runnable) -> modifyTVar (_threadsRunning supervisor) (succ)
             (Unstarted, Terminated) -> return ()
@@ -133,6 +133,11 @@ setThreadState' supervisor (ThreadEntry _ threadState) newValue = do
             (Runnable,  Terminated) -> modifyTVar (_threadsRunning supervisor) (pred)
 
             _ -> error $ "supervised-concurrency panic: unexcepted thread state transition: " ++ (show oldValue) ++ " -> " ++ (show newValue) ++ "."
+
+        name <- readTVar nameTVar
+        runningThreads <- readTVar (_threadsRunning supervisor)
+        trace ((show name) ++ " " ++ (show oldValue) ++ " -> " ++ (show newValue) ++ ". Threads running: " ++ (show runningThreads)) writeTVar threadState newValue
+
 
 setThreadState :: Supervisor -> ThreadId -> ThreadState -> STM ()
 setThreadState supervisor threadId threadState = do

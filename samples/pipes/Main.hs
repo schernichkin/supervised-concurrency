@@ -92,6 +92,7 @@ tracer threadId prevState = do
 main :: IO ()
 main = do
     runSupervisedT $ do
+        void $ setThreadName "mainThread"
         (output, input) <- newChannel Pipes.Unbounded
         consumerId <- spawnNamed "consumer" $ runEffect (fromInput input >-> consumer)
         void $ spawnNamed "tracer1" $ tracer consumerId Unstarted
