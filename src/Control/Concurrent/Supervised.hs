@@ -12,7 +12,7 @@ module Control.Concurrent.Supervised
     ( Supervisor
     , MonadSupervisor (..)
     , SupervisorT
-    , runSupervisedT
+    , runSupervisorT
     , spawn
     , spawnNamed
 
@@ -31,7 +31,6 @@ module Control.Concurrent.Supervised
     , Receiver
     , Unsupervised
     , registerChannel
-    , registerChannel1
     ) where
 
 import           Control.Applicative
@@ -74,7 +73,7 @@ data ThreadEntry = ThreadEntry (TVar (Maybe String)) (TVar ThreadState)
 class (MonadBaseControl IO m) => MonadSupervisor m where
     getSupervisor :: m Supervisor
 
-newtype SupervisorT s m a = SupervisedT { unSupervisedT :: ReaderT Supervisor m a } deriving
+newtype SupervisorT s m a = SupervisedT { unSupervisorT :: ReaderT Supervisor m a } deriving
     ( Functor
     , Applicative
     , Alternative
@@ -89,7 +88,7 @@ instance (MonadBaseControl IO m) => MonadSupervisor (SupervisorT s m) where
 
 instance MonadTransControl (SupervisorT s) where
     newtype StT (SupervisorT s) a = StSupervisedT { unStSupervisedT :: StT (ReaderT Supervisor) a }
-    liftWith = defaultLiftWith SupervisedT unSupervisedT StSupervisedT
+    liftWith = defaultLiftWith SupervisedT unSupervisorT StSupervisedT
     restoreT = defaultRestoreT SupervisedT unStSupervisedT
 
 instance (MonadBase b m) => MonadBase b (SupervisorT s m) where
@@ -101,12 +100,12 @@ instance (MonadBaseControl b m) => MonadBaseControl b (SupervisorT s m) where
     liftBaseWith = defaultLiftBaseWith StMSupervisedT
     restoreM     = defaultRestoreM unStMSupervisedT
 
-runSupervisedT :: (MonadBaseControl IO m) => (forall s . SupervisorT s m a) -> m a
-runSupervisedT action = do
+runSupervisorT :: (MonadBaseControl IO m) => (forall s . SupervisorT s m a) -> m a
+runSupervisorT action = do
     bracket
        startSupervisor
        stopSupervisor
-       (runReaderT $ unSupervisedT action)
+       (runReaderT $ unSupervisorT action)
     where
         startSupervisor = liftBase $ do
             thisThread <- myThreadId
@@ -257,9 +256,6 @@ data ChannelState = Free Int Int       -- ^ Channel is free to send recieve (num
                   | RecieverLock
                   | RecieverReply Bool -- ^ Recievers reply to current sender (bool indicated if a message was actually recieved or reciever was interrupted).
     deriving ( Show )
-
-registerChannel1 :: (MonadSupervisor  m) => (Channel Unsupervised n a) -> m (Channel s n a)
-registerChannel1 = undefined
 
 registerChannel :: (MonadBase IO m, MonadBaseControl IO n) => (Channel Unsupervised n a) -> SupervisorT s m (Channel s n a)
 registerChannel (Channel sender reciever) = SupervisedT $ do

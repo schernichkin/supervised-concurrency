@@ -1,11 +1,11 @@
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE RankNTypes            #-}
-{-# LANGUAGE NoMonomorphismRestriction            #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE MultiParamTypeClasses     #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE RankNTypes                #-}
 
 module Main where
 
-import           Control.Concurrent            (threadDelay, ThreadId)
+import           Control.Concurrent            (ThreadId, threadDelay)
 import           Control.Concurrent.Supervised
 import           Control.Monad
 import           Control.Monad.Base
@@ -13,12 +13,6 @@ import           Control.Monad.Trans.Control
 import           Control.Monad.Trans.Maybe
 import           Pipes
 import qualified Pipes.Concurrent              as Pipes
-
-a = registerChannel undefined
-
-b = registerChannel1 undefined
-
-c = runSupervisedT b
 
 newChannel :: (MonadBaseControl IO m) => Pipes.Buffer a -> SupervisorT s m (Sender s (MaybeT IO) a, Receiver s (MaybeT IO) a)
 newChannel buffer = fmap simplify (newChannel' buffer)
@@ -98,7 +92,7 @@ tracer threadId prevState = do
 
 main :: IO ()
 main = do
-    runSupervisedT $ do
+    runSupervisorT $ do
         void $ setThreadName "mainThread"
         (output, input) <- newChannel Pipes.Unbounded
         consumerId <- spawnNamed "consumer" $ runEffect (fromInput input >-> consumer)
