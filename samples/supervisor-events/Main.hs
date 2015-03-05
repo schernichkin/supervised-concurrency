@@ -24,7 +24,7 @@ worker2 = liftBase $ do
 
 main :: IO ()
 main = do
-    runSupervisedT $ do
+    runSupervisorT $ do
         void $ spawn worker1
         waitTill NoRunningThreads
     putStrLn "All threads terminated. Press any key to exit."

@@ -14,6 +14,8 @@ import           Control.Monad.Trans.Maybe
 import           Pipes
 import qualified Pipes.Concurrent              as Pipes
 
+
+
 newChannel :: (MonadBaseControl IO m) => Pipes.Buffer a -> SupervisorT s m (Sender s (MaybeT IO) a, Receiver s (MaybeT IO) a)
 newChannel buffer = fmap simplify (newChannel' buffer)
     where simplify (sender, reciever, _) = (sender, reciever)

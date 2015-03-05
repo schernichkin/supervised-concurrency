@@ -18,7 +18,7 @@ worker = do
 
 main :: IO ()
 main = do
-    runSupervisedT $ do
+    runSupervisorT $ do
         void $ spawnNamed "worker 1" worker
         void $ spawnNamed "worker 2" worker
         liftBase $ do
