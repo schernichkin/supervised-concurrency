@@ -86,18 +86,18 @@ instance (MonadBaseControl IO m) => MonadSupervisor (SupervisorT s m) where
     getSupervisor = SupervisedT ask
 
 instance MonadTransControl (SupervisorT s) where
-    newtype StT (SupervisorT s) a = StSupervisedT { unStSupervisedT :: StT (ReaderT Supervisor) a }
-    liftWith = defaultLiftWith SupervisedT unSupervisorT StSupervisedT
-    restoreT = defaultRestoreT SupervisedT unStSupervisedT
+    newtype StT (SupervisorT s) a = StSupervisorT { unStSupervisorT :: StT (ReaderT Supervisor) a }
+    liftWith = defaultLiftWith SupervisedT unSupervisorT StSupervisorT
+    restoreT = defaultRestoreT SupervisedT unStSupervisorT
 
 instance (MonadBase b m) => MonadBase b (SupervisorT s m) where
     liftBase = liftBaseDefault
 
 instance (MonadBaseControl b m) => MonadBaseControl b (SupervisorT s m) where
-    newtype StM (SupervisorT s m) a = StMSupervisedT { unStMSupervisedT :: ComposeSt (SupervisorT s) m a }
+    newtype StM (SupervisorT s m) a = StMSupervisorT { unStMSupervisorT :: ComposeSt (SupervisorT s) m a }
 
-    liftBaseWith = defaultLiftBaseWith StMSupervisedT
-    restoreM     = defaultRestoreM unStMSupervisedT
+    liftBaseWith = defaultLiftBaseWith StMSupervisorT
+    restoreM     = defaultRestoreM unStMSupervisorT
 
 runSupervisorT :: (MonadBaseControl IO m) => (forall s . SupervisorT s m a) -> m a
 runSupervisorT action = do
@@ -209,16 +209,6 @@ data SupervisorEvent result where
     SupervisorState :: (Map ThreadId ThreadInfo -> Maybe result) -> SupervisorEvent result
     NoRunningThreads :: SupervisorEvent ()
 
-toThreadInfo :: ThreadId -> ThreadEntry -> STM ThreadInfo
-toThreadInfo threadId (ThreadEntry threadNameVar threadStateVar) = do
-    threadName <- readTVar threadNameVar
-    threadState <- readTVar threadStateVar
-    return ThreadInfo
-        { _threadId = threadId
-        , _threadName = threadName
-        , _threadState = threadState
-        }
-
 waitTill :: (MonadSupervisor m) => SupervisorEvent a -> m a
 waitTill event = do
     thisThread  <- myThreadId
@@ -237,6 +227,16 @@ waitTill event = do
                     fromMaybe retry $ fmap return $ f state
                 NoRunningThreads -> atomically $ readTVar (_threadsRunning supervisor) >>= check . (==) 0 )
             ( atomically $ setThreadState supervisor thisThread Runnable )
+
+toThreadInfo :: ThreadId -> ThreadEntry -> STM ThreadInfo
+toThreadInfo threadId (ThreadEntry threadNameVar threadStateVar) = do
+    threadName <- readTVar threadNameVar
+    threadState <- readTVar threadStateVar
+    return ThreadInfo
+        { _threadId = threadId
+        , _threadName = threadName
+        , _threadState = threadState
+        }
 
 -- | Sender channel
 type Sender s m a = a -> m () -- Для ошибок можно использовать исключения, либо MonadError
